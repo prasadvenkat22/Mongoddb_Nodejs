@@ -1,0 +1,46 @@
+# This dockerfile builds an image for the backend package.
+# It should be executed with the root of the repo as docker context.
+#
+# Before building this image, be sure to have run the following commands in the repo root:
+#
+# yarn install
+# yarn tsc
+# yarn build:backend
+#
+# Once the commands have been run, you can build the image using `yarn build-image`
+
+FROM node:18-bookworm-slim
+
+# Install isolate-vm dependencies, these are needed by the @backstage/plugin-scaffolder-backend.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    apt-get install -y --no-install-recommends python3 g++ build-essential curl && \
+    yarn config set python /usr/bin/python3
+
+
+# From here on we use the least-privileged `node` user to run the backend.
+#RUN rm /usr/lib/python3.11/EXTERNALLY-MANAGED
+WORKDIR /app
+
+RUN apt-get update -y  && apt install python3 -y   && apt install python3-pip -y \
+    && apt install python3-venv -y && python3 -m venv /opt/venv 
+ENV VIRTUAL_ENV=/opt/venv
+RUN python3 -m venv $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+# Install dependencies:
+#COPY requirements.txt .
+RUN python -m pip install mkdocs-techdocs-core
+
+USER node
+
+# This should create the app dir as `node`.
+# If it is instead created as `root` then the `tar` command below will fail: `can't create directory 'packages/': Permission denied`.
+# If this occurs, then ensure BuildKit is enabled (`DOCKER_BUILDKIT=1`) so the app dir is correctly created as `node`.
+WORKDIR /app
+
+# This switches many Node.js dependencies to production mode.
+ENV NODE_ENV production
+
+
+#docker build -t maestro-test .
